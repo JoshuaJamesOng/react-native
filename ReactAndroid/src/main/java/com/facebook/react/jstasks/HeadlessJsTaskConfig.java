@@ -61,6 +61,13 @@ public class HeadlessJsTaskConfig {
     mAllowedInForeground = allowedInForeground;
   }
 
+  public HeadlessJsTaskConfig(HeadlessJsTaskConfig source) {
+    mTaskKey = source.mTaskKey;
+    mData = source.mData.copy();
+    mTimeout = source.mTimeout;
+    mAllowedInForeground = source.mAllowedInForeground;
+  }
+
   /* package */ String getTaskKey() {
     return mTaskKey;
   }

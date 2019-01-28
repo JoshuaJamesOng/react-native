@@ -4,6 +4,8 @@ import static org.fest.assertions.api.Assertions.assertThat;
 
 import android.support.test.runner.AndroidJUnit4;
 import com.facebook.react.bridge.UnexpectedNativeTypeException;
+import com.facebook.react.bridge.WritableArray;
+import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.bridge.WritableNativeArray;
 import com.facebook.react.bridge.WritableNativeMap;
 import org.junit.Assert;
@@ -15,6 +17,8 @@ import org.junit.runner.RunWith;
 @RunWith(AndroidJUnit4.class)
 public class WritableNativeMapTest {
 
+  private static final String ARRAY = "array";
+  private static final String MAP = "map";
   private WritableNativeMap mMap;
 
   @Before
@@ -24,8 +28,8 @@ public class WritableNativeMapTest {
     mMap.putDouble("double", 1.2);
     mMap.putInt("int", 1);
     mMap.putString("string", "abc");
-    mMap.putMap("map", new WritableNativeMap());
-    mMap.putArray("array", new WritableNativeArray());
+    mMap.putMap(MAP, new WritableNativeMap());
+    mMap.putArray(ARRAY, new WritableNativeArray());
     mMap.putBoolean("dvacca", true);
     mMap.setUseNativeAccessor(true);
   }
@@ -100,5 +104,23 @@ public class WritableNativeMapTest {
     } catch (UnexpectedNativeTypeException e) {
       assertThat(e.getMessage()).contains(key);
     }
+  }
+
+  @Test
+  public void testCopy() {
+    final WritableMap copy = mMap.copy();
+
+    assertThat(copy).isNotSameAs(mMap);
+    assertThat(copy.getMap(MAP)).isNotSameAs(mMap.getMap(MAP));
+    assertThat(copy.getArray(ARRAY)).isNotSameAs(mMap.getArray(ARRAY));
+  }
+
+  @Test
+  public void testCopyModification() {
+    final WritableMap copy = mMap.copy();
+    ((WritableArray) copy.getArray(ARRAY)).pushString("modification");
+
+    assertThat(copy.getArray(ARRAY).size()).isEqualTo(1);
+    assertThat(mMap.getArray(ARRAY).size()).isEqualTo(0);
   }
 }

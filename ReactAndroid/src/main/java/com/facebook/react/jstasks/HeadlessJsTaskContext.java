@@ -7,11 +7,14 @@ package com.facebook.react.jstasks;
 
 import java.lang.ref.WeakReference;
 import java.util.Set;
+import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import android.os.Handler;
+import android.os.Looper;
 import android.util.SparseArray;
 
 import com.facebook.infer.annotation.Assertions;
@@ -51,6 +54,7 @@ public class HeadlessJsTaskContext {
   private final AtomicInteger mLastTaskId = new AtomicInteger(0);
   private final Handler mHandler = new Handler();
   private final Set<Integer> mActiveTasks = new CopyOnWriteArraySet<>();
+  private final Map<Integer, HeadlessJsTaskConfig> mActiveTaskConfigs = new ConcurrentHashMap<>();
   private final SparseArray<Runnable> mTaskTimeouts = new SparseArray<>();
 
   private HeadlessJsTaskContext(ReactContext reactContext) {
@@ -85,6 +89,16 @@ public class HeadlessJsTaskContext {
    * @return a unique id representing this task instance.
    */
   public synchronized int startTask(final HeadlessJsTaskConfig taskConfig) {
+    final int taskId = mLastTaskId.incrementAndGet();
+    startTask(taskConfig, taskId);
+    return taskId;
+  }
+
+  /**
+   * Start a JS task the provided task id. Handles invoking {@link AppRegistry#startHeadlessTask}
+   * and notifying listeners.
+   */
+  private synchronized void startTask(final HeadlessJsTaskConfig taskConfig, int taskId) {
     UiThreadUtil.assertOnUiThread();
     ReactContext reactContext = Assertions.assertNotNull(
       mReactContext.get(),
@@ -95,8 +109,8 @@ public class HeadlessJsTaskContext {
         "Tried to start task " + taskConfig.getTaskKey() +
           " while in foreground, but this is not allowed.");
     }
-    final int taskId = mLastTaskId.incrementAndGet();
     mActiveTasks.add(taskId);
+    mActiveTaskConfigs.put(taskId, new HeadlessJsTaskConfig(taskConfig));
     reactContext.getJSModule(AppRegistry.class)
       .startHeadlessTask(taskId, taskConfig.getTaskKey(), taskConfig.getData());
     if (taskConfig.getTimeout() > 0) {
@@ -105,7 +119,32 @@ public class HeadlessJsTaskContext {
     for (HeadlessJsTaskEventListener listener : mHeadlessJsTaskEventListeners) {
       listener.onHeadlessJsTaskStart(taskId);
     }
-    return taskId;
+  }
+
+  /**
+   * Retry a running JS task with a delay. Invokes
+   * {@link HeadlessJsTaskContext#startTask(HeadlessJsTaskConfig, int)} as long as the process does
+   * not get killed.
+   *
+   * @return true if a retry attempt has been posted.
+   */
+  public synchronized boolean retryTask(final int taskId, int retryDelayInMs) {
+    final HeadlessJsTaskConfig sourceTaskConfig = mActiveTaskConfigs.get(taskId);
+    Assertions.assertCondition(
+      sourceTaskConfig != null,
+      "Tried to retrieve non-existent task config with id " + taskId + ".");
+    removeTimeout(taskId);
+    final HeadlessJsTaskConfig taskConfig = new HeadlessJsTaskConfig(sourceTaskConfig);
+
+    final Runnable retryAttempt = new Runnable() {
+      @Override
+      public void run() {
+        startTask(taskConfig, taskId);
+      }
+    };
+
+    UiThreadUtil.runOnUiThread(retryAttempt, retryDelayInMs);
+    return true;
   }
 
   /**
@@ -118,11 +157,10 @@ public class HeadlessJsTaskContext {
     Assertions.assertCondition(
       mActiveTasks.remove(taskId),
       "Tried to finish non-existent task with id " + taskId + ".");
-    Runnable timeout = mTaskTimeouts.get(taskId);
-    if (timeout != null) {
-      mHandler.removeCallbacks(timeout);
-      mTaskTimeouts.remove(taskId);
-    }
+    Assertions.assertCondition(
+     mActiveTaskConfigs.remove(taskId) != null,
+     "Tried to remove non-existent task config with id " + taskId + ".");
+    removeTimeout(taskId);
     UiThreadUtil.runOnUiThread(new Runnable() {
       @Override
       public void run() {
@@ -131,6 +169,14 @@ public class HeadlessJsTaskContext {
         }
       }
     });
+  }
+
+  private void removeTimeout(int taskId) {
+    Runnable timeout = mTaskTimeouts.get(taskId);
+    if (timeout != null) {
+      mHandler.removeCallbacks(timeout);
+      mTaskTimeouts.remove(taskId);
+    }
   }
 
   /**
