@@ -89,42 +89,42 @@ public class HeadlessJsTaskContext {
    * @return a unique id representing this task instance.
    */
   public synchronized int startTask(final HeadlessJsTaskConfig taskConfig) {
-    return startTask(taskConfig, mLastTaskId.incrementAndGet());
+    final int taskId = mLastTaskId.incrementAndGet();
+    startTask(taskConfig, taskId);
+    return taskId;
   }
 
   /**
-   * Start a JS task. Handles invoking {@link AppRegistry#startHeadlessTask} and notifying
-   * listeners.
-   *
-   * @return a unique id representing this task instance.
+   * Start a JS task the provided task id. Handles invoking {@link AppRegistry#startHeadlessTask}
+   * and notifying listeners.
    */
-  private synchronized int startTask(final HeadlessJsTaskConfig taskConfig, int taskId) {
+  private synchronized void startTask(final HeadlessJsTaskConfig taskConfig, int taskId) {
     UiThreadUtil.assertOnUiThread();
     ReactContext reactContext = Assertions.assertNotNull(
-            mReactContext.get(),
-            "Tried to start a task on a react context that has already been destroyed");
+      mReactContext.get(),
+      "Tried to start a task on a react context that has already been destroyed");
     if (reactContext.getLifecycleState() == LifecycleState.RESUMED &&
-            !taskConfig.isAllowedInForeground()) {
+      !taskConfig.isAllowedInForeground()) {
       throw new IllegalStateException(
-              "Tried to start task " + taskConfig.getTaskKey() +
-                      " while in foreground, but this is not allowed.");
+        "Tried to start task " + taskConfig.getTaskKey() +
+          " while in foreground, but this is not allowed.");
     }
     mActiveTasks.add(taskId);
     mActiveTaskConfigs.put(taskId, new HeadlessJsTaskConfig(taskConfig));
     reactContext.getJSModule(AppRegistry.class)
-            .startHeadlessTask(taskId, taskConfig.getTaskKey(), taskConfig.getData());
+      .startHeadlessTask(taskId, taskConfig.getTaskKey(), taskConfig.getData());
     if (taskConfig.getTimeout() > 0) {
       scheduleTaskTimeout(taskId, taskConfig.getTimeout());
     }
     for (HeadlessJsTaskEventListener listener : mHeadlessJsTaskEventListeners) {
       listener.onHeadlessJsTaskStart(taskId);
     }
-    return taskId;
   }
 
-
   /**
-   * Retry a JS task with a delay.
+   * Retry a running JS task with a delay. Invokes
+   * {@link HeadlessJsTaskContext#startTask(HeadlessJsTaskConfig, int)} as long as the process does
+   * not get killed.
    *
    * @return true if a retry attempt has been posted.
    */
