@@ -229,9 +229,18 @@ const AppRegistry = {
       throw new Error(`No task registered for key ${taskKey}`);
     }
     taskProvider()(data)
-      .then(() =>
-        NativeModules.HeadlessJsTaskSupport.notifyTaskFinished(taskId),
-      )
+      .then(retryInMs => {
+        if (retryInMs && 0 < retryInMs) {
+          const retry = NativeModules.HeadlessJsTaskSupport.notifyTaskRetry(taskId, retryInMs);
+          retry.then(retried => {
+            if (!retried) {
+              NativeModules.HeadlessJsTaskSupport.notifyTaskFinished(taskId)
+            }
+          })
+        } else {
+          NativeModules.HeadlessJsTaskSupport.notifyTaskFinished(taskId)
+        }
+      })
       .catch(reason => {
         console.error(reason);
         NativeModules.HeadlessJsTaskSupport.notifyTaskFinished(taskId);

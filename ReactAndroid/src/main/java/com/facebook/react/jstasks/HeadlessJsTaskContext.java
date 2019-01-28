@@ -7,11 +7,14 @@ package com.facebook.react.jstasks;
 
 import java.lang.ref.WeakReference;
 import java.util.Set;
+import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import android.os.Handler;
+import android.os.Looper;
 import android.util.SparseArray;
 
 import com.facebook.infer.annotation.Assertions;
@@ -50,7 +53,9 @@ public class HeadlessJsTaskContext {
     new CopyOnWriteArraySet<>();
   private final AtomicInteger mLastTaskId = new AtomicInteger(0);
   private final Handler mHandler = new Handler();
+  private final Handler mMainHandler = new Handler(Looper.getMainLooper());
   private final Set<Integer> mActiveTasks = new CopyOnWriteArraySet<>();
+  private final Map<Integer, HeadlessJsTaskConfig> mActiveTaskConfigs = new ConcurrentHashMap<>();
   private final SparseArray<Runnable> mTaskTimeouts = new SparseArray<>();
 
   private HeadlessJsTaskContext(ReactContext reactContext) {
@@ -97,6 +102,7 @@ public class HeadlessJsTaskContext {
     }
     final int taskId = mLastTaskId.incrementAndGet();
     mActiveTasks.add(taskId);
+    mActiveTaskConfigs.put(taskId, new HeadlessJsTaskConfig(taskConfig));
     reactContext.getJSModule(AppRegistry.class)
       .startHeadlessTask(taskId, taskConfig.getTaskKey(), taskConfig.getData());
     if (taskConfig.getTimeout() > 0) {
@@ -106,6 +112,28 @@ public class HeadlessJsTaskContext {
       listener.onHeadlessJsTaskStart(taskId);
     }
     return taskId;
+  }
+
+  public synchronized boolean retryTask(int taskId, int retryInMs) {
+    final HeadlessJsTaskConfig sourceTaskConfig = mActiveTaskConfigs.get(taskId);
+    Assertions.assertCondition(
+      sourceTaskConfig != null,
+      "Tried to retrieve non-existent task config with id " + taskId + ".");
+    final HeadlessJsTaskConfig taskConfig = new HeadlessJsTaskConfig(sourceTaskConfig);
+    final boolean isRetryPossible = taskConfig != null;
+
+    if (!isRetryPossible) {
+      return false;
+    }
+
+    final Runnable runnable = new Runnable() {
+      @Override
+      public void run() {
+        startTask(taskConfig);
+      }
+    };
+    mMainHandler.postDelayed(runnable, retryInMs);
+    return true;
   }
 
   /**
@@ -118,6 +146,9 @@ public class HeadlessJsTaskContext {
     Assertions.assertCondition(
       mActiveTasks.remove(taskId),
       "Tried to finish non-existent task with id " + taskId + ".");
+    Assertions.assertCondition(
+     mActiveTaskConfigs.remove(taskId) != null,
+     "Tried to remove non-existent task config with id " + taskId + ".");
     Runnable timeout = mTaskTimeouts.get(taskId);
     if (timeout != null) {
       mHandler.removeCallbacks(timeout);
