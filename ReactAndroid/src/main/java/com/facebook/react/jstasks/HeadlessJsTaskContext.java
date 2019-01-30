@@ -53,7 +53,6 @@ public class HeadlessJsTaskContext {
     new CopyOnWriteArraySet<>();
   private final AtomicInteger mLastTaskId = new AtomicInteger(0);
   private final Handler mHandler = new Handler();
-  private final Handler mMainHandler = new Handler(Looper.getMainLooper());
   private final Set<Integer> mActiveTasks = new CopyOnWriteArraySet<>();
   private final Map<Integer, HeadlessJsTaskConfig> mActiveTaskConfigs = new ConcurrentHashMap<>();
   private final SparseArray<Runnable> mTaskTimeouts = new SparseArray<>();
@@ -114,25 +113,26 @@ public class HeadlessJsTaskContext {
     return taskId;
   }
 
-  public synchronized boolean retryTask(int taskId, int retryInMs) {
+  /**
+   * Retry a JS task with a delay.
+   *
+   * @return true if a retry attempt has been posted.
+   */
+  public synchronized boolean retryTask(int taskId, int retryDelayInMs) {
     final HeadlessJsTaskConfig sourceTaskConfig = mActiveTaskConfigs.get(taskId);
     Assertions.assertCondition(
       sourceTaskConfig != null,
       "Tried to retrieve non-existent task config with id " + taskId + ".");
     final HeadlessJsTaskConfig taskConfig = new HeadlessJsTaskConfig(sourceTaskConfig);
-    final boolean isRetryPossible = taskConfig != null;
 
-    if (!isRetryPossible) {
-      return false;
-    }
-
-    final Runnable runnable = new Runnable() {
+    final Runnable retryAttempt = new Runnable() {
       @Override
       public void run() {
         startTask(taskConfig);
       }
     };
-    mMainHandler.postDelayed(runnable, retryInMs);
+
+    UiThreadUtil.runOnUiThread(retryAttempt, retryDelayInMs);
     return true;
   }
 

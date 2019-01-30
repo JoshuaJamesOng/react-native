@@ -34,12 +34,12 @@ public class HeadlessJsTaskSupportModule extends ReactContextBaseJavaModule {
   }
 
   @ReactMethod
-  public void notifyTaskRetry(int taskId, int retryInMs, Promise promise) {
+  public void notifyTaskRetry(int taskId, int retryAgainInMs, Promise promise) {
     HeadlessJsTaskContext headlessJsTaskContext =
       HeadlessJsTaskContext.getInstance(getReactApplicationContext());
     if (headlessJsTaskContext.isTaskRunning(taskId)) {
-      final boolean retried = headlessJsTaskContext.retryTask(taskId, retryInMs);
-      promise.resolve(retried);
+      final boolean retryPosted = headlessJsTaskContext.retryTask(taskId, retryAgainInMs);
+      promise.resolve(retryPosted);
     } else {
       FLog.w(
         HeadlessJsTaskSupportModule.class,
