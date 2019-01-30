@@ -123,6 +123,7 @@ public class HeadlessJsTaskContext {
     Assertions.assertCondition(
       sourceTaskConfig != null,
       "Tried to retrieve non-existent task config with id " + taskId + ".");
+    removeTimeout(taskId);
     final HeadlessJsTaskConfig taskConfig = new HeadlessJsTaskConfig(sourceTaskConfig);
 
     final Runnable retryAttempt = new Runnable() {
@@ -149,11 +150,7 @@ public class HeadlessJsTaskContext {
     Assertions.assertCondition(
      mActiveTaskConfigs.remove(taskId) != null,
      "Tried to remove non-existent task config with id " + taskId + ".");
-    Runnable timeout = mTaskTimeouts.get(taskId);
-    if (timeout != null) {
-      mHandler.removeCallbacks(timeout);
-      mTaskTimeouts.remove(taskId);
-    }
+    removeTimeout(taskId);
     UiThreadUtil.runOnUiThread(new Runnable() {
       @Override
       public void run() {
@@ -162,6 +159,14 @@ public class HeadlessJsTaskContext {
         }
       }
     });
+  }
+
+  private void removeTimeout(int taskId) {
+    Runnable timeout = mTaskTimeouts.get(taskId);
+    if (timeout != null) {
+      mHandler.removeCallbacks(timeout);
+      mTaskTimeouts.remove(taskId);
+    }
   }
 
   /**
