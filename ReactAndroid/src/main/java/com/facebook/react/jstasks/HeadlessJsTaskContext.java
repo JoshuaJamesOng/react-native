@@ -89,21 +89,30 @@ public class HeadlessJsTaskContext {
    * @return a unique id representing this task instance.
    */
   public synchronized int startTask(final HeadlessJsTaskConfig taskConfig) {
+    return startTask(taskConfig, mLastTaskId.incrementAndGet());
+  }
+
+  /**
+   * Start a JS task. Handles invoking {@link AppRegistry#startHeadlessTask} and notifying
+   * listeners.
+   *
+   * @return a unique id representing this task instance.
+   */
+  private synchronized int startTask(final HeadlessJsTaskConfig taskConfig, int taskId) {
     UiThreadUtil.assertOnUiThread();
     ReactContext reactContext = Assertions.assertNotNull(
-      mReactContext.get(),
-      "Tried to start a task on a react context that has already been destroyed");
+            mReactContext.get(),
+            "Tried to start a task on a react context that has already been destroyed");
     if (reactContext.getLifecycleState() == LifecycleState.RESUMED &&
-      !taskConfig.isAllowedInForeground()) {
+            !taskConfig.isAllowedInForeground()) {
       throw new IllegalStateException(
-        "Tried to start task " + taskConfig.getTaskKey() +
-          " while in foreground, but this is not allowed.");
+              "Tried to start task " + taskConfig.getTaskKey() +
+                      " while in foreground, but this is not allowed.");
     }
-    final int taskId = mLastTaskId.incrementAndGet();
     mActiveTasks.add(taskId);
     mActiveTaskConfigs.put(taskId, new HeadlessJsTaskConfig(taskConfig));
     reactContext.getJSModule(AppRegistry.class)
-      .startHeadlessTask(taskId, taskConfig.getTaskKey(), taskConfig.getData());
+            .startHeadlessTask(taskId, taskConfig.getTaskKey(), taskConfig.getData());
     if (taskConfig.getTimeout() > 0) {
       scheduleTaskTimeout(taskId, taskConfig.getTimeout());
     }
@@ -113,12 +122,13 @@ public class HeadlessJsTaskContext {
     return taskId;
   }
 
+
   /**
    * Retry a JS task with a delay.
    *
    * @return true if a retry attempt has been posted.
    */
-  public synchronized boolean retryTask(int taskId, int retryDelayInMs) {
+  public synchronized boolean retryTask(final int taskId, int retryDelayInMs) {
     final HeadlessJsTaskConfig sourceTaskConfig = mActiveTaskConfigs.get(taskId);
     Assertions.assertCondition(
       sourceTaskConfig != null,
@@ -129,7 +139,7 @@ public class HeadlessJsTaskContext {
     final Runnable retryAttempt = new Runnable() {
       @Override
       public void run() {
-        startTask(taskConfig);
+        startTask(taskConfig, taskId);
       }
     };
 
