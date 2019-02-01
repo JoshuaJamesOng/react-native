@@ -229,11 +229,11 @@ const AppRegistry = {
       throw new Error(`No task registered for key ${taskKey}`);
     }
     taskProvider()(data)
-      .then(retryAgainInMs => {
-        if (retryAgainInMs && 0 < retryAgainInMs) {
+      .then(response => {
+        if (response && 'timeout' in response && Number.isInteger(response.timeout)) {
           const retry = NativeModules.HeadlessJsTaskSupport.notifyTaskRetry(
             taskId,
-            retryAgainInMs,
+            response.timeout,
           );
           retry.then(retryPosted => {
             if (!retryPosted) {
