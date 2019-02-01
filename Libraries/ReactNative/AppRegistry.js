@@ -230,7 +230,7 @@ const AppRegistry = {
     }
     taskProvider()(data)
       .then(response => {
-        if (response && 'timeout' in response && Number.isInteger(response.timeout)) {
+        if (response && Number.isInteger(response.timeout)) {
           const retry = NativeModules.HeadlessJsTaskSupport.notifyTaskRetry(
             taskId,
             response.timeout,
