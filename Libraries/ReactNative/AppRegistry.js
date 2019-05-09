@@ -14,6 +14,7 @@ const BugReporting = require('BugReporting');
 const NativeModules = require('NativeModules');
 const ReactNative = require('ReactNative');
 const SceneTracker = require('SceneTracker');
+const HeadlessJsTask = require('HeadlessJsTask');
 
 const infoLog = require('infoLog');
 const invariant = require('invariant');
@@ -237,15 +238,18 @@ const AppRegistry = {
       )
       .catch(reason => {
         console.error(reason);
-        const retry = NativeModules.HeadlessJsTaskSupport.notifyTaskRetry(
-          taskId,
-        );
 
-        retry.then(retryPosted => {
-          if (!retryPosted) {
-            NativeModules.HeadlessJsTaskSupport.notifyTaskFinished(taskId);
-          }
-        });
+        if (reason instanceof HeadlessJsTask.HeadlessJsTaskError) {
+          const retry = NativeModules.HeadlessJsTaskSupport.notifyTaskRetry(
+            taskId,
+          );
+
+          retry.then(retryPosted => {
+            if (!retryPosted) {
+              NativeModules.HeadlessJsTaskSupport.notifyTaskFinished(taskId);
+            }
+          });
+        }
       });
   },
 };
