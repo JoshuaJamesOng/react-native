@@ -232,24 +232,20 @@ const AppRegistry = {
       throw new Error(`No task registered for key ${taskKey}`);
     }
     taskProvider()(data)
-      .then(response => {
-        if (response && Number.isInteger(response.timeout)) {
-          const retry = NativeModules.HeadlessJsTaskSupport.notifyTaskRetry(
-            taskId,
-            response.timeout,
-          );
-          retry.then(retryPosted => {
-            if (!retryPosted) {
-              NativeModules.HeadlessJsTaskSupport.notifyTaskFinished(taskId);
-            }
-          });
-        } else {
-          NativeModules.HeadlessJsTaskSupport.notifyTaskFinished(taskId);
-        }
-      })
+      .then(() =>
+        NativeModules.HeadlessJsTaskSupport.notifyTaskFinished(taskId),
+      )
       .catch(reason => {
         console.error(reason);
-        NativeModules.HeadlessJsTaskSupport.notifyTaskFinished(taskId);
+        const retry = NativeModules.HeadlessJsTaskSupport.notifyTaskRetry(
+          taskId,
+        );
+
+        retry.then(retryPosted => {
+          if (!retryPosted) {
+            NativeModules.HeadlessJsTaskSupport.notifyTaskFinished(taskId);
+          }
+        });
       });
   },
 };

@@ -5,16 +5,7 @@
 
 package com.facebook.react.jstasks;
 
-import java.lang.ref.WeakReference;
-import java.util.Set;
-import java.util.Map;
-import java.util.WeakHashMap;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArraySet;
-import java.util.concurrent.atomic.AtomicInteger;
-
 import android.os.Handler;
-import android.os.Looper;
 import android.util.SparseArray;
 
 import com.facebook.infer.annotation.Assertions;
@@ -22,6 +13,14 @@ import com.facebook.react.bridge.ReactContext;
 import com.facebook.react.bridge.UiThreadUtil;
 import com.facebook.react.common.LifecycleState;
 import com.facebook.react.modules.appregistry.AppRegistry;
+
+import java.lang.ref.WeakReference;
+import java.util.Map;
+import java.util.Set;
+import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Helper class for dealing with JS tasks. Handles per-ReactContext active task tracking, starting /
@@ -128,13 +127,27 @@ public class HeadlessJsTaskContext {
    *
    * @return true if a retry attempt has been posted.
    */
-  public synchronized boolean retryTask(final int taskId, int retryDelayInMs) {
+  public synchronized boolean retryTask(final int taskId) {
     final HeadlessJsTaskConfig sourceTaskConfig = mActiveTaskConfigs.get(taskId);
     Assertions.assertCondition(
       sourceTaskConfig != null,
       "Tried to retrieve non-existent task config with id " + taskId + ".");
+
+    boolean shouldRetry = sourceTaskConfig.getNumberOfRetries() > 0;
+    if (!shouldRetry) {
+      return false;
+    }
+
     removeTimeout(taskId);
-    final HeadlessJsTaskConfig taskConfig = new HeadlessJsTaskConfig(sourceTaskConfig);
+    final int remainingRetryAttempts = sourceTaskConfig.getNumberOfRetries() - 1;
+    final HeadlessJsTaskConfig taskConfig = new HeadlessJsTaskConfig(
+            sourceTaskConfig.getTaskKey(),
+            sourceTaskConfig.getData(),
+            sourceTaskConfig.getTimeout(),
+            sourceTaskConfig.isAllowedInForeground(),
+            remainingRetryAttempts,
+            sourceTaskConfig.getRetryDelayInMs()
+    );
 
     final Runnable retryAttempt = new Runnable() {
       @Override
@@ -143,7 +156,7 @@ public class HeadlessJsTaskContext {
       }
     };
 
-    UiThreadUtil.runOnUiThread(retryAttempt, retryDelayInMs);
+    UiThreadUtil.runOnUiThread(retryAttempt, taskConfig.getRetryDelayInMs());
     return true;
   }
 
