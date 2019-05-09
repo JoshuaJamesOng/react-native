@@ -237,19 +237,32 @@ const AppRegistry = {
       )
       .catch(reason => {
         console.error(reason);
-        const retry = NativeModules.HeadlessJsTaskSupport.notifyTaskRetry(
-          taskId,
-        );
 
-        retry.then(retryPosted => {
-          if (!retryPosted) {
-            NativeModules.HeadlessJsTaskSupport.notifyTaskFinished(taskId);
-          }
-        });
+        if (reason instanceof HeadlessJsTaskError) {
+          const retry = NativeModules.HeadlessJsTaskSupport.notifyTaskRetry(
+            taskId,
+          );
+
+          retry.then(retryPosted => {
+            if (!retryPosted) {
+              NativeModules.HeadlessJsTaskSupport.notifyTaskFinished(taskId);
+            }
+          });
+        }
       });
   },
 };
 
 BatchedBridge.registerCallableModule('AppRegistry', AppRegistry);
 
-module.exports = AppRegistry;
+class HeadlessJsTaskError extends Error {
+  constructor(...args) {
+    super(...args)
+    Error.captureStackTrace(this, HeadlessJsTaskError)
+  }
+}
+
+module.exports = {
+  AppRegistry,
+  HeadlessJsTaskError
+}
