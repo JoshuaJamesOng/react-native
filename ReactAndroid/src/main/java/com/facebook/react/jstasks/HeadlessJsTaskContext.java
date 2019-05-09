@@ -133,20 +133,18 @@ public class HeadlessJsTaskContext {
       sourceTaskConfig != null,
       "Tried to retrieve non-existent task config with id " + taskId + ".");
 
-    boolean shouldRetry = sourceTaskConfig.getNumberOfRetries() > 0;
-    if (!shouldRetry) {
+    final HeadlessJsTaskRetryPolicy retryPolicy = sourceTaskConfig.getRetryPolicy();
+    if (!retryPolicy.canRetry()) {
       return false;
     }
 
     removeTimeout(taskId);
-    final int remainingRetryAttempts = sourceTaskConfig.getNumberOfRetries() - 1;
     final HeadlessJsTaskConfig taskConfig = new HeadlessJsTaskConfig(
             sourceTaskConfig.getTaskKey(),
             sourceTaskConfig.getData(),
             sourceTaskConfig.getTimeout(),
             sourceTaskConfig.isAllowedInForeground(),
-            remainingRetryAttempts,
-            sourceTaskConfig.getRetryDelayInMs()
+            retryPolicy.update()
     );
 
     final Runnable retryAttempt = new Runnable() {
@@ -156,7 +154,7 @@ public class HeadlessJsTaskContext {
       }
     };
 
-    UiThreadUtil.runOnUiThread(retryAttempt, taskConfig.getRetryDelayInMs());
+    UiThreadUtil.runOnUiThread(retryAttempt, retryPolicy.getDelay());
     return true;
   }
 

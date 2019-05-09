@@ -15,8 +15,7 @@ public class HeadlessJsTaskConfig {
   private final WritableMap mData;
   private final long mTimeout;
   private final boolean mAllowedInForeground;
-  private final int mNumberOfRetries;
-  private final int mRetryDelayInMs;
+  private final HeadlessJsTaskRetryPolicy mRetryPolicy;
 
   /**
    * Create a HeadlessJsTaskConfig. Equivalent to calling
@@ -57,7 +56,7 @@ public class HeadlessJsTaskConfig {
     WritableMap data,
     long timeout,
     boolean allowedInForeground) {
-    this(taskKey, data, timeout, allowedInForeground, 0, 0);
+    this(taskKey, data, timeout, allowedInForeground, NoRetryPolicy.INSTANCE);
   }
 
   /**
@@ -75,23 +74,19 @@ public class HeadlessJsTaskConfig {
    * (i.e. there is a host in resumed mode for the current ReactContext). Only set this to true if
    * you really need it. Note that tasks run in the same JS thread as UI code, so doing expensive
    * operations would degrade user experience.
-   * @param numberOfRetries the number of times the task should be retried on error. A value of
-   * means no retries.
-   * @param retryDelayInMs the delay between each retry attempt
+   * @param retryPolicy the number of times & delays the task should be retried on error.
    */
   public HeadlessJsTaskConfig(
           String taskKey,
           WritableMap data,
           long timeout,
           boolean allowedInForeground,
-          int numberOfRetries,
-          int retryDelayInMs) {
+          HeadlessJsTaskRetryPolicy retryPolicy) {
     mTaskKey = taskKey;
     mData = data;
     mTimeout = timeout;
     mAllowedInForeground = allowedInForeground;
-    mNumberOfRetries = numberOfRetries;
-    mRetryDelayInMs = retryDelayInMs;
+    mRetryPolicy = retryPolicy;
   }
 
   public HeadlessJsTaskConfig(HeadlessJsTaskConfig source) {
@@ -99,8 +94,13 @@ public class HeadlessJsTaskConfig {
     mData = source.mData.copy();
     mTimeout = source.mTimeout;
     mAllowedInForeground = source.mAllowedInForeground;
-    mNumberOfRetries = source.mNumberOfRetries;
-    mRetryDelayInMs = source.mRetryDelayInMs;
+
+    final HeadlessJsTaskRetryPolicy retryPolicy = source.mRetryPolicy;
+    if (retryPolicy != null) {
+      mRetryPolicy = retryPolicy.copy();
+    } else {
+      mRetryPolicy = null;
+    }
   }
 
   /* package */ String getTaskKey() {
@@ -119,11 +119,7 @@ public class HeadlessJsTaskConfig {
     return mAllowedInForeground;
   }
 
-  /* package */ int getNumberOfRetries() {
-    return mNumberOfRetries;
-  }
-
-  /* package */ int getRetryDelayInMs() {
-    return mRetryDelayInMs;
+  /* package */ HeadlessJsTaskRetryPolicy getRetryPolicy() {
+    return mRetryPolicy;
   }
 }
